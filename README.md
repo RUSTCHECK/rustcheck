@@ -1,6 +1,5 @@
-# RUSTCHECK:Safety Enhancement of the Unsafe Rust
-RUSTCHEKCK Enhance the safety of unsafe Rust, and to help
-Rust developers effectively diagnose the root causes of
+# RUSTCHECK: Safety Enhancement of the Unsafe Rust
+RUSTCHEKCK enhances the safety of unsafe Rust, and helps Rust developers effectively diagnose the root causes of
 memory-related bugs.
 
 
@@ -26,12 +25,7 @@ RUSTCHECK takes the following key steps to diagnose bugs:
 
 	1) it performs static program analysis to identify possible insecure patterns;
  	2) it inserts necessary runtime checks against the identified insecure patterns;
-
 	3) it re-executes the instrumented Rust programs to identify the root causes of the bugs or crashes.
-
-## Caveats
-1. Currently only supports double free, use after free.
-2. The approach to instrumentation is still immature and uses many assumptions.
 
 ## Acknowledgement
 We learned a lot from the following projects when building prototype system.
