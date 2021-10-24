@@ -131,24 +131,6 @@ fn mir_analysis(tcx: TyCtxt) {
             let basic_blocks = body.basic_blocks();
             let local_decls = &body.local_decls;
             let var_debug_info = &body.var_debug_info;
-            let tkind = &basic_blocks[BasicBlock::from_usize(0)].terminator.as_ref().unwrap().kind;
-            
-            match tkind {
-                rustc_middle::mir::terminator::TerminatorKind::Call {
-                    func,
-                    args,
-                    destination,
-                    cleanup,
-                    from_hir_call,
-                    fn_span,
-                } => {
-                    if let rustc_middle::mir::Operand::Constant(box(c)) = &args[0] {
-                        dbg!(&c.literal);
-                    }
-                }
-                _ => ()
-            }
-
             for (id, block_data) in basic_blocks.iter_enumerated() {
                 let terminator = block_data.terminator();
                 // the index of basic blocks
@@ -164,7 +146,8 @@ fn mir_analysis(tcx: TyCtxt) {
                         
                         let mut args: Vec<Operand> = Vec::new();
                         args.push(Operand::Copy(Place::from(Local::from_usize(0))));
-
+                        let line = get_line(&tcx, &var_debug_info, 0);
+                        args.push(gen_u32_args(&tcx, line));
                         // get table table_lookup.
                         let func = new_fn_call(2, &tcx, &des_ids);
 
@@ -218,7 +201,9 @@ fn mir_analysis(tcx: TyCtxt) {
                     } => {
                         let mut args: Vec<Operand> = Vec::new();
                         args.push(Operand::Copy(*place));
-
+                        // dbg!(place.local.as_usize());
+                        let line = get_line(&tcx, &var_debug_info, place.local.as_u32());
+                        args.push(gen_u32_args(&tcx, line));
                         // prepare for the table_delete call
                         let func = new_fn_call(1, &tcx, &des_ids);
                         let mlocal = new_unit(&local_decls, &tcx);
@@ -239,6 +224,10 @@ fn mir_analysis(tcx: TyCtxt) {
                         }
                         // prepare for the table_delete call
                         let mut args = args.to_vec();
+                        if let rustc_middle::mir::Operand::Move(place) = &args[0] {
+                            let line = get_line(&tcx, &var_debug_info, place.local.as_u32());
+                            args.push(gen_u32_args(&tcx, line));
+                        }
                         let func = new_fn_call(1, &tcx, &des_ids);
                         let mlocal = new_unit(&local_decls, &tcx);
                         change_block(&block_data, basic_blocks, &func, index, mlocal, args);
@@ -252,6 +241,7 @@ fn mir_analysis(tcx: TyCtxt) {
             let body = tcx.optimized_mir(*fn_id);
             let basic_blocks = body.basic_blocks();
             let local_decls = &body.local_decls;
+            let var_debug_info = &body.var_debug_info;
             for (id, block_data) in basic_blocks.iter_enumerated() {
                 let terminator = block_data.terminator();
                 // the index of basic blocks
@@ -275,6 +265,8 @@ fn mir_analysis(tcx: TyCtxt) {
                         // make table function's args
                         let mut args: Vec<Operand> = Vec::new();
                         args.push(Operand::Copy(Place::from(Local::from_usize(mlocal))));
+                        let line = get_line(&tcx, &var_debug_info, mlocal as u32);
+                        args.push(gen_u32_args(&tcx, line));
 
                         // get table table_lookup.
                         let func = new_fn_call(2, &tcx, &des_ids);
@@ -343,6 +335,8 @@ fn mir_analysis(tcx: TyCtxt) {
                         
                         let mut args: Vec<Operand> = Vec::new();
                         args.push(Operand::Copy(Place::from(Local::from_usize(mlocal))));
+                        let line = get_line(&tcx, &var_debug_info, place.local.as_u32());
+                        args.push(gen_u32_args(&tcx, line));
 
                         // add assign statements to basicblocks[indedx].statements.
                         add_new_assign_stmt(mlocal, place.local.as_usize(), index, &basic_blocks);
@@ -369,6 +363,11 @@ fn mir_analysis(tcx: TyCtxt) {
 
                         // prepare for the table_delete call
                         let mut args = args.to_vec();
+                        if let rustc_middle::mir::Operand::Move(place) = &args[0] {
+                            let line = get_line(&tcx, &var_debug_info, place.local.as_u32());
+                            args.push(gen_u32_args(&tcx, line));
+                        }
+                        
                         let func = new_fn_call(1, &tcx, &des_ids);
                         let mlocal = new_unit(&local_decls, &tcx);
                         change_block(&block_data, basic_blocks, &func, index, mlocal, args);
@@ -591,4 +590,38 @@ pub fn match_fn_def(func: &rustc_middle::mir::Operand, crate_index: usize, index
         }
     }
     return false;
+}
+
+pub fn get_line(tcx: &TyCtxt, var_debug_info: &Vec<rustc_middle::mir::VarDebugInfo>, var: u32) -> u32 {
+    for item in var_debug_info {
+        if let rustc_middle::mir::VarDebugInfoContents::Place(place) = &item.value {
+            if place.local.as_u32() == var {
+                // dbg!(&item.source_info.span.lo());
+                let bp = item.source_info.span.lo().clone();
+                let sess = &tcx.sess;
+                let sm = sess.source_map();
+                // dbg!(sm.lookup_line(bp));
+                if let Ok(sfal) = sm.lookup_line(bp) {
+                    return sfal.line as u32;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+pub fn gen_u32_args<'a>(tcx: &'a TyCtxt, value: u32) -> Operand<'a> {
+    let mconst = tcx.mk_const(Const {
+        val: ConstKind::Value(ConstValue::Scalar(Scalar::from_u32(value))),
+        ty: tcx.mk_ty(TyKind::Uint(rustc_middle::ty::UintTy::U32)),
+    });  
+    let literal = mir::ConstantKind::Ty(mconst);
+    let span = Span::default();
+    let user_ty: Option<UserTypeAnnotationIndex> = None;
+    let const_val = Operand::Constant(Box::new(Constant {
+        span,
+        user_ty,
+        literal,
+    }));
+    return const_val;
 }

@@ -23,12 +23,13 @@ pub fn table_insert(ptr: *const u8) {
     println!("inserted...");
 }
 
-pub fn table_delete(ptr: *const u8) {
+// pub fn table_delete(ptr: *const u8) {
+pub fn table_delete(ptr: *const u8, line: u32) {
     println!("try to delete 0x{:x}...", ptr as usize);
     let uptr = ptr as usize;
     let len = table_query(ptr);
     if !(len > 0) {
-        println!("***do not double free 0x{:x}...***", ptr as usize);
+        println!("***do not double free 0x{:x}..., which declared at line:{}***", ptr as usize, line);
         std::process::exit(0x0100)
     }
     // assert!(len > 0, "***double free***");
@@ -52,7 +53,7 @@ pub fn table_query(ptr: *const u8) -> usize {
 }
 
 // pub fn table_lookup(ptr: *const u8, var: String, position: String) {
-pub fn table_lookup(ptr: *const u8) {
+pub fn table_lookup(ptr: *const u8, len: u32) {
     unsafe{
     println!("try to lookup 0x{:x}...", ptr as usize);
     }
@@ -60,7 +61,7 @@ pub fn table_lookup(ptr: *const u8) {
     // assert!(result != 0, "***use after free***");
     // assert!(result < len, "***out-of-bound access***");
     if result == 0 {
-        println!("do not use 0x{:x} after free...", ptr as usize);
+        println!("***do not use 0x{:x} after free, which is declared at line:{}***", ptr as usize, len);
         std::process::exit(0x0100);
     }
     println!("lookup done...");

@@ -31,5 +31,9 @@ RUSTCHECK takes the following key steps to diagnose bugs:
 
 ## Caveats
 1. Currently only supports double free, use after free.
-2. The approach to instrumenting is still immature and uses many assumptions.
+2. The approach to instrumentation is still immature and uses many assumptions.
+
+## Acknowledgement
+We learned a lot from the following projects when building prototype system.
+- [rust-lock-bug-detector](https://github.com/BurtonQin/rust-lock-bug-detector): the code frame.
 
